@@ -1,0 +1,106 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Forex Live Charts</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body { margin: 0; font-family: sans-serif; background: #fff; color: #000; }
+    .tabs { display: flex; justify-content: space-around; background: #eee; padding: 10px 0; }
+    .tab { cursor: pointer; padding: 10px; border-bottom: 2px solid transparent; }
+    .tab.active { border-bottom: 2px solid #000; font-weight: bold; }
+    .chart-container { display: none; width: 100%; height: 400px; }
+    .chart-container.active { display: block; }
+  </style>
+</head>
+<body>
+
+<div class="tabs">
+  <div class="tab active" data-symbol="EURAUD">EURAUD</div>
+  <div class="tab" data-symbol="NZDCHF">NZDCHF</div>
+  <div class="tab" data-symbol="CADJPY">CADJPY</div>
+</div>
+
+<div id="EURAUD" class="chart-container active"></div>
+<div id="NZDCHF" class="chart-container"></div>
+<div id="CADJPY" class="chart-container"></div>
+
+<script src="https://unpkg.com/lightweight-charts@3.8.0/dist/lightweight-charts.standalone.production.js"></script>
+<script>
+  const symbols = {
+    'EURAUD': 'EURAUD',
+    'NZDCHF': 'NZDCHF',
+    'CADJPY': 'CADJPY'
+  };
+  const charts = {};
+
+  function fetchData(symbol, callback) {
+    const url = `https://www.alphavantage.co/query?function=FX_INTRADAY&from_symbol=${symbol.slice(0,3)}&to_symbol=${symbol.slice(3)}&interval=5min&outputsize=compact&apikey=503DC35655CG3G8F`;
+    fetch(url)
+      .then(response => response.json())
+      .then(data => {
+        const timeSeries = data['Time Series FX (5min)'];
+        if (!timeSeries) return;
+        const bars = Object.entries(timeSeries).map(([time, d]) => {
+          return {
+            time: Math.floor(new Date(time).getTime() / 1000),
+            open: parseFloat(d['1. open']),
+            high: parseFloat(d['2. high']),
+            low: parseFloat(d['3. low']),
+            close: parseFloat(d['4. close'])
+          };
+        }).sort((a, b) => a.time - b.time);
+        callback(bars);
+      })
+      .catch(err => console.error(err));
+  }
+
+  function createChart(symbol) {
+    const chartDiv = document.getElementById(symbol);
+    const chart = LightweightCharts.createChart(chartDiv, {
+      width: chartDiv.clientWidth,
+      height: 400,
+      layout: {
+        backgroundColor: '#ffffff',
+        textColor: '#000000',
+      },
+      grid: {
+        vertLines: { visible: false },
+        horLines: { visible: false },
+      },
+      priceScale: { borderVisible: false },
+      timeScale: { borderVisible: false },
+    });
+
+    const candleSeries = chart.addCandlestickSeries({
+      upColor: 'black',
+      downColor: 'darkgreen',
+      borderUpColor: 'black',
+      borderDownColor: 'darkgreen',
+      wickUpColor: 'black',
+      wickDownColor: 'darkgreen',
+    });
+
+    fetchData(symbol, (bars) => {
+      candleSeries.setData(bars);
+    });
+
+    charts[symbol] = { chart, candleSeries };
+  }
+
+  Object.keys(symbols).forEach(createChart);
+
+  document.querySelectorAll('.tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+
+      const symbol = tab.dataset.symbol;
+      document.querySelectorAll('.chart-container').forEach(div => div.classList.remove('active'));
+      document.getElementById(symbol).classList.add('active');
+    });
+  });
+</script>
+</body>
+</html>
